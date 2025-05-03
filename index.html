@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <meta name="description" content="A web app to extract business data and generate proposals from CSV input.">
   <meta name="author" content="Your Name or Business">
-  <title>Business Proposal Generator | Holistic Growth Marketing</title>
+  <title>Business Proposal Generator | Brand Name</title>
 
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -35,7 +35,7 @@
   </main>
 
   <footer class="bg-gray-800 text-white text-center p-4">
-    <p>&copy; 2025 Holistic Growth Marketing. All rights reserved.</p>
+    <p>© 2025 Your Brand Name. All rights reserved.</p>
   </footer>
 
   <script type="text/babel">
@@ -44,21 +44,23 @@
     function App() {
       const [csvFile, setCsvFile] = useState(null);
       const [apiKey, setApiKey] = useState('');
+      const [webAppUrl, setWebAppUrl] = useState('');
       const [logs, setLogs] = useState([]);
       const [proposals, setProposals] = useState([]);
+      const [dashboard, setDashboard] = useState(null);
       const [isProcessing, setIsProcessing] = useState(false);
 
       const logMessage = (message) => {
         setLogs((prev) => [...prev, message]);
       };
 
-      // Function to parse CSV
+      // Parse CSV file
       const parseCsv = (file) => {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => {
             const text = e.target.result;
-            const rows = text.split('\n').map(row => row.split(','));
+            const rows = text.split('\n').map(row => row.trim());
             resolve(rows);
           };
           reader.onerror = (e) => reject(e);
@@ -66,252 +68,44 @@
         });
       };
 
-      // Adapted extractBusinessData
-      const extractBusinessData = async (data) => {
-        const regex = /^(.*?)\s*[-:]\s*(https?:\/\/\S+)/;
-        const output = [];
-
-        const isValidUrl = (url) => {
-          try {
-            new URL(url);
-            return true;
-          } catch (_) {
-            return false;
-          }
-        };
-
-        data.forEach((row, index) => {
-          const cell = row[0];
-          if (typeof cell === 'string') {
-            const match = cell.match(regex);
-            if (match) {
-              const businessName = match[1].trim();
-              const url = match[2].trim();
-              if (isValidUrl(url)) {
-                output.push([businessName, url]);
-              } else {
-                logMessage(`Invalid URL in row ${index + 1}: ${url}`);
-              }
-            } else {
-              logMessage(`No match found in row ${index + 1}: ${cell}`);
-            }
-          } else {
-            logMessage(`Non-string cell in row ${index + 1}: ${cell}`);
-          }
-        });
-
-        return output;
-      };
-
-      // Adapted fetchGBPData
-      const fetchGBPData = async (businessName, phoneNumber) => {
-        if (!apiKey) {
-          logMessage('Google Places API key is missing.');
-          return {};
-        }
-
-        try {
-          const query = encodeURIComponent(`${businessName} ${phoneNumber || ''}`);
-          const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
-          const searchResponse = await fetch(searchUrl);
-          const searchJson = await searchResponse.json();
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
-
-          if (searchJson.status !== 'OK' || searchJson.results.length === 0) {
-            logMessage(`No results found for business: ${businessName}, phone: ${phoneNumber}. API Status: ${searchJson.status}`);
-            return {};
-          }
-
-          const placeId = searchJson.results[0].place_id;
-          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,international_phone_number,website,types&key=${apiKey}`;
-          const detailsResponse = await fetch(detailsUrl);
-          const detailsJson = await detailsResponse.json();
-
-          if (detailsJson.status !== 'OK') {
-            logMessage(`No details found for business: ${businessName}, phone: ${phoneNumber}. API Status: ${detailsJson.status}`);
-            return {};
-          }
-
-          const details = detailsJson.result;
-          return {
-            description: details.name || 'N/A',
-            market: details.types ? details.types.join(', ') : 'N/A',
-            locations: details.formatted_address || 'N/A',
-          };
-        } catch (error) {
-          logMessage(`Error fetching GBP data for business: ${businessName}, phone: ${phoneNumber}. Error: ${error.message}`);
-          return {};
-        }
-      };
-
-      // Simplified fetchWebsiteData (CORS-limited)
-      const fetchWebsiteData = async (website) => {
-        if (!website) return {};
-        try {
-          // Note: Direct website fetching may fail due to CORS. Use a proxy in production.
-          const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(website)}`);
-          const data = await response.json();
-          const content = data.contents;
-
-          const extractMeta = (name) => {
-            const regex = new RegExp(`<meta\\s+name="${name}"\\s+content="([^"]*)"`, 'i');
-            const match = content.match(regex);
-            return match ? match[1] : '';
-          };
-
-          return {
-            siteDescription: extractMeta('description'),
-            keywords: extractMeta('keywords'),
-          };
-        } catch (error) {
-          logMessage(`Error fetching website data for: ${website}. Error: ${error.message}`);
-          return {};
-        }
-      };
-
-      // Generate proposal template
-      const generateProposalTemplate = (values) => {
-        return `
-          <html>
-            <head>
-              <title>Proposal for ${values['Business Name']}</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                h1 { color: #1a73e8; }
-                .section { margin-bottom: 20px; }
-              </style>
-            </head>
-            <body>
-              <h1>Proposal for ${values['Business Name']}</h1>
-              <div class="section">
-                <h2>Business Details</h2>
-                <p><strong>Name:</strong> ${values['Business Name']}</p>
-                <p><strong>Website:</strong> ${values['Website']}</p>
-                <p><strong>Phone:</strong> ${values['Phone Number']}</p>
-                <p><strong>Description:</strong> ${values['gbp_description']}</p>
-                <p><strong>Market:</strong> ${values['market']}</p>
-                <p><strong>Locations:</strong> ${values['locations']}</p>
-              </div>
-              <div class="section">
-                <h2>Proposal Strategies</h2>
-                <p><strong>Optimization Strategy:</strong> ${values['optimization_strategy']}</p>
-                <p><strong>Lead Generation:</strong> ${values['lead_gen_strategy']}</p>
-                <p><strong>Automation:</strong> ${values['automation_strategy']}</p>
-                <!-- Add more strategies as needed -->
-              </div>
-              <div class="section">
-                <h2>Contact Us</h2>
-                <p><strong>Company:</strong> ${values['Your Company Name']}</p>
-                <p><strong>Contact:</strong> ${values['Your Name']} (${values['Your Title']})</p>
-                <p><strong>Schedule a Call:</strong> <a href="${values['discovery_call_link']}">Click here</a></p>
-              </div>
-            </body>
-          </html>
-        `;
-      };
-
-      // Adapted generateProposals
-      const generateProposals = async (data) => {
-        setIsProcessing(true);
-        setProposals([]);
-        const headers = data[0];
-        const requiredHeaders = ['Business Name', 'Website', 'Phone Number'];
-
-        for (const header of requiredHeaders) {
-          if (!headers.includes(header)) {
-            logMessage(`Error: Missing required header '${header}' in CSV.`);
-            setIsProcessing(false);
-            return;
-          }
-        }
-
-        const newProposals = [];
-        for (const row of data.slice(1)) {
-          try {
-            const businessName = row[headers.indexOf('Business Name')];
-            const website = row[headers.indexOf('Website')];
-            const phoneNumber = row[headers.indexOf('Phone Number')];
-
-            const gbpData = await fetchGBPData(businessName, phoneNumber) || {};
-            const websiteData = await fetchWebsiteData(website) || {};
-
-            const gbpValues = {
-              gbp_description: gbpData.description || 'N/A',
-              market: gbpData.market || 'N/A',
-              locations: gbpData.locations || 'N/A',
-            };
-
-            const proposalValues = {
-              optimization_strategy: 'Custom strategy based on market insights',
-              lead_gen_strategy: 'Optimized Google Maps listing with targeted keywords',
-              automation_strategy: 'AI-powered lead tracking and reputation management',
-              keyword_rank_goals: 'Rank in top 3 for local searches',
-              campaign_goals: 'Increase paid ad ROI by 30%',
-              content_strategy: 'Develop blog content and infographics',
-              bi_goals: 'Implement Google Data Studio for performance tracking',
-              sales_cycle_specs: 'Custom CRM integration for lead management',
-              technology_stack: 'Google Ads, GA4, GSC, CRM tools',
-              audience_specs: 'Local businesses and consumers',
-              roi_metrics: 'Revenue increase after 90 days',
-              roas_metrics: 'Ad spend efficiency metrics',
-              seo_visibility: 'Higher organic ranking and local visibility',
-              engagement_metrics: 'Increase website engagement by 25%',
-              lead_conversion_rate: 'Convert 10% more visitors into leads',
-              brand_authority: 'Position as a leader in the industry',
-              content_retention: 'Consistent brand engagement',
-              bi_insights: 'Actionable data reports',
-              streamlining_ops: 'Improved workflows through automation',
-              discovery_call_link: 'https://yourcompany.com/schedule',
-              plan_launch_date: 'Next available start date',
-            };
-
-            const companyValues = {
-              'Your Company Name': 'Your Business Name',
-              'Your Name': 'Your Name',
-              'Your Title': 'Your Title',
-              'Your Contact Information': 'Your Contact Details',
-            };
-
-            const rowValues = {
-              'Business Name': businessName,
-              'Website': website,
-              'Phone Number': phoneNumber,
-            };
-
-            const values = { ...rowValues, ...gbpValues, ...proposalValues, ...companyValues };
-            const proposalContent = generateProposalTemplate(values);
-
-            // Create downloadable file
-            const blob = new Blob([proposalContent], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            newProposals.push({ businessName, url });
-          } catch (error) {
-            logMessage(`Error processing proposal for: ${row[headers.indexOf('Business Name')]}. Error: ${error.message}`);
-          }
-        }
-
-        setProposals(newProposals);
-        setIsProcessing(false);
-      };
-
-      // Handle CSV upload and processing
+      // Handle CSV processing by sending to Apps Script Web App
       const handleProcess = async () => {
         if (!csvFile) {
           logMessage('Please upload a CSV file.');
           return;
         }
+        if (!apiKey) {
+          logMessage('Please enter a Google Places API key.');
+          return;
+        }
+        if (!webAppUrl) {
+          logMessage('Please enter the Google Apps Script Web App URL.');
+          return;
+        }
 
+        setIsProcessing(true);
         try {
-          const data = await parseCsv(csvFile);
-          const extractedData = await extractBusinessData(data);
-          if (extractedData.length > 0) {
-            logMessage(`Extracted ${extractedData.length} valid business entries.`);
-            await generateProposals(data);
+          const csvData = await parseCsv(csvFile);
+          const response = await fetch(webAppUrl, {
+            method: 'POST',
+            body: JSON.stringify({ csvData, apiKey }),
+            headers: { 'Content-Type': 'application/json' }
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            setProposals(result.proposals || []);
+            setDashboard(result.dashboard || null);
+            setLogs(result.logs || []);
+            logMessage(`Processed ${result.proposals.length} proposals successfully.`);
           } else {
-            logMessage('No valid business data extracted.');
+            logMessage(`Error from server: ${result.error}`);
+            setLogs(result.logs || []);
           }
         } catch (error) {
           logMessage(`Error processing CSV: ${error.message}`);
+        } finally {
+          setIsProcessing(false);
         }
       };
 
@@ -328,6 +122,9 @@
                   onChange={(e) => setCsvFile(e.target.files[0])}
                   className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  CSV should have headers: Business Name, Website, Phone Number
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Google Places API Key</label>
@@ -337,6 +134,16 @@
                   onChange={(e) => setApiKey(e.target.value)}
                   className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
                   placeholder="Enter your API key"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Google Apps Script Web App URL</label>
+                <input
+                  type="text"
+                  value={webAppUrl}
+                  onChange={(e) => setWebAppUrl(e.target.value)}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="Enter Web App URL"
                 />
               </div>
               <button
@@ -349,18 +156,43 @@
             </div>
           </div>
 
+          {dashboard && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-semibold mb-4">Performance Dashboard</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-100 rounded-md">
+                  <p className="font-semibold">Total Proposals</p>
+                  <p>{dashboard.totalProposals}</p>
+                </div>
+                <div className="p-4 bg-gray-100 rounded-md">
+                  <p className="font-semibold">Average Lead Score</p>
+                  <p>{dashboard.averageLeadScore}</p>
+                </div>
+                <div className="p-4 bg-gray-100 rounded-md">
+                  <p className="font-semibold">High-Quality Leads (>70)</p>
+                  <p>{dashboard.highQualityLeads}</p>
+                </div>
+                <div className="p-4 bg-gray-100 rounded-md">
+                  <p className="font-semibold">Emails Sent</p>
+                  <p>{dashboard.emailsSent}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {proposals.length > 0 && (
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-xl font-semibold mb-4">Generated Proposals</h2>
               <ul className="space-y-2">
                 {proposals.map((proposal, index) => (
-                  <li key={index}>
+                  <li key={index} className="flex items-center justify-between">
                     <a
                       href={proposal.url}
-                      download={`${proposal.businessName}_Proposal.html`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
                     >
-                      Download Proposal for {proposal.businessName}
+                      Proposal for {proposal.businessName} (Score: {proposal.leadScore})
                     </a>
                   </li>
                 ))}
